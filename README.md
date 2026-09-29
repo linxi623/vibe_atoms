@@ -30,10 +30,10 @@ npm run dev
 ```powershell
 npm run typecheck
 npm run build
-node --env-file=.env --test --test-concurrency=1 tests/f1.test.mjs tests/generation.test.mjs tests/workbench.test.mjs tests/preview.test.mjs tests/frame-policy.test.mjs tests/versions.test.mjs tests/public-demo.test.mjs
+node --test --test-concurrency=1 tests/f1.test.mjs tests/generation.test.mjs tests/workbench.test.mjs tests/preview.test.mjs tests/frame-policy.test.mjs tests/versions.test.mjs tests/public-demo.test.mjs
 ```
 
-测试会创建并删除独立 PostgreSQL 测试库，使用模拟模型，不消耗真实额度；`DATABASE_URL` 须指向可创建数据库的本地实例。`tests/real-generation.test.mjs` 仅在 `REAL_MODEL_TEST=1` 时调用真实模型，会消耗额度。
+测试会创建并删除独立 PostgreSQL 测试库，使用模拟模型，不消耗真实额度；运行前须在当前 shell 设置可创建数据库的本地 `DATABASE_URL`（也可用未跟踪的 `.env` 配合 Node 的 `--env-file=.env` 参数）。`tests/real-generation.test.mjs` 仅在 `REAL_MODEL_TEST=1` 时调用真实模型，会消耗额度。
 
 ## 部署
 
