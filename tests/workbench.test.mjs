@@ -73,10 +73,13 @@ test("C: browser workbench first run, iteration, failure, linked retry and mobil
   let model;
   let releaseIteration;
   let holdIteration = true;
+  let releaseFirstPlanning;
+  let holdFirstPlanning = true;
   let releaseFirstGeneration;
   let holdFirstGeneration = true;
   t.after(async () => {
     releaseIteration?.();
+    releaseFirstPlanning?.();
     releaseFirstGeneration?.();
     await browser?.close();
     if (app?.child.exitCode === null) { app.child.kill(); await once(app.child, "exit"); }
@@ -96,6 +99,10 @@ test("C: browser workbench first run, iteration, failure, linked retry and mobil
     const planning = body.messages[0].content.includes("规划器");
     const prompt = body.messages.at(-1).content;
     await delay(450);
+    if (planning && prompt.includes("自定义植物") && holdFirstPlanning) {
+      holdFirstPlanning = false;
+      await new Promise((resolve) => { releaseFirstPlanning = resolve; });
+    }
     if (planning && prompt.includes("增加颜色") && holdIteration) {
       holdIteration = false;
       await new Promise((resolve) => { releaseIteration = resolve; });
@@ -128,6 +135,7 @@ test("C: browser workbench first run, iteration, failure, linked retry and mobil
   await page.getByRole("button", { name: "发送需求" }).click();
   await page.getByText("规划需求", { exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: "发送需求" }).isDisabled(), true);
+  releaseFirstPlanning();
   await page.getByText("生成代码", { exact: true }).waitFor();
   releaseFirstGeneration();
   await page.getByText("生成完成", { exact: true }).waitFor();

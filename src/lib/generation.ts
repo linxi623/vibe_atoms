@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type pg from "pg";
 import { db } from "@/lib/db";
+import { limits, LimitError, reserveGeneration, reserveTaskBudget } from "@/lib/limits";
 import { generateApplication, ModelError } from "@/lib/model";
 
 export type TaskErrorCode = "MODEL" | "FORMAT" | "STORAGE" | "NETWORK" | "CONFLICT" | "TIMEOUT";
@@ -31,7 +32,6 @@ export function validatePrompt(prompt: unknown): string {
   return value;
 }
 
-const taskTimeoutMs = 180_000;
 const promptHash = (prompt: string, retryOfId?: string) =>
   createHash("sha256").update(JSON.stringify([prompt, retryOfId ?? null])).digest("hex");
 
@@ -39,17 +39,21 @@ export async function reapStaleTasks(client: pg.PoolClient | pg.Pool, projectId?
   await client.query(
     `UPDATE tasks SET status = 'failed', stage = 'done', error_code = 'TIMEOUT',
             error_detail = '生成任务超时或中断', updated_at = now()
-     WHERE status = 'running' AND COALESCE(deadline_at, created_at + interval '3 minutes') < now()
+     WHERE status = 'running' AND COALESCE(deadline_at, created_at + ($2 * interval '1 millisecond')) < now()
        AND ($1::uuid IS NULL OR project_id = $1)`,
-    [projectId ?? null],
+    [projectId ?? null, limits().taskTimeoutMs],
   );
 }
 
-export async function createTask(owner: string, projectId: string, prompt: string, idempotencyKey: string, retryOfId?: string) {
+export async function createTask(
+  owner: string, projectId: string, prompt: string, idempotencyKey: string, ip: string, retryOfId?: string,
+) {
   const pool = db();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // The advisory lock serializes admission across app instances, not model execution.
+    await client.query("SELECT pg_advisory_xact_lock(921847330)");
     const project = await client.query<{ current_version_id: string | null }>(
       "SELECT current_version_id FROM projects WHERE id = $1 AND visitor_id = $2 FOR UPDATE",
       [projectId, owner],
@@ -88,11 +92,21 @@ export async function createTask(owner: string, projectId: string, prompt: strin
       await client.query("ROLLBACK");
       return { kind: "conflict" as const };
     }
+    await reapStaleTasks(client);
+    const running = await client.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM tasks WHERE status = 'running'",
+    );
+    if (Number(running.rows[0].count) >= limits().globalConcurrency) {
+      throw new LimitError(429, "Global generation concurrency limit reached");
+    }
+    await reserveGeneration(client, owner, ip, projectId);
+    await reserveTaskBudget(client);
     const taskId = randomUUID();
     await client.query(
       `INSERT INTO tasks(id, project_id, base_version_id, status, stage, idempotency_key, retry_of_id, prompt_hash, deadline_at)
-       VALUES ($1, $2, $3, 'running', 'planning', $4, $5, $6, now() + interval '3 minutes')`,
-      [taskId, projectId, project.rows[0].current_version_id, idempotencyKey, retryOfId ?? null, promptHash(prompt, retryOfId)],
+       VALUES ($1, $2, $3, 'running', 'planning', $4, $5, $6, now() + ($7 * interval '1 millisecond'))`,
+      [taskId, projectId, project.rows[0].current_version_id, idempotencyKey, retryOfId ?? null,
+        promptHash(prompt, retryOfId), limits().taskTimeoutMs],
     );
     await client.query(
       "INSERT INTO messages(id, project_id, role, content, task_id) VALUES ($1, $2, 'user', $3, $4)",
@@ -110,8 +124,8 @@ export async function createTask(owner: string, projectId: string, prompt: strin
 
 export async function executeTask(taskId: string, prompt: string, baseVersionId: string | null) {
   const pool = db();
-  const deadline = Date.now() + taskTimeoutMs;
   try {
+    const deadline = Date.now() + limits().taskTimeoutMs;
     let currentHtml: string | null = null;
     if (baseVersionId) {
       const base = await pool.query<{ html: string }>("SELECT html FROM versions WHERE id = $1", [baseVersionId]);

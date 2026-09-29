@@ -24,6 +24,25 @@ const timeoutMs = 90_000;
 const maxPromptLength = 8_000;
 const maxHtmlLength = 500_000;
 
+export function modelConfigured(): boolean {
+  try {
+    config();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tokenBudget(): number {
+  const raw = process.env.MODEL_TASK_TOKEN_BUDGET;
+  if (!raw) return 25_000;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 2_000 || value > 100_000) {
+    throw new ModelError("模型任务预算配置无效", "MODEL_CONFIG");
+  }
+  return value;
+}
+
 function config() {
   const apiKey = process.env.MODEL_API_KEY;
   const baseUrl = process.env.MODEL_BASE_URL;
@@ -39,6 +58,9 @@ function config() {
   }
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
     throw new ModelError("模型服务地址无效", "MODEL_CONFIG");
+  }
+  if (url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
+    throw new ModelError("模型服务必须使用 HTTPS", "MODEL_CONFIG");
   }
   return { apiKey, url, model };
 }
@@ -146,14 +168,14 @@ function validateHtml(value: unknown): string {
   return value;
 }
 
-async function repair(raw: string, reason: string, deadline: number, check: (html: string) => void): Promise<{ html: string; summary: string }> {
+async function repair(raw: string, reason: string, deadline: number, check: (html: string) => void, reserve: (amount: number) => number): Promise<{ html: string; summary: string }> {
   const result = parseJson(await callModel([
     {
       role: "system",
       content: "修复模型输出。只返回 JSON：{\"html\":\"完整单文件HTML字符串\",\"summary\":\"简短摘要\"}。不要使用 Markdown 代码围栏。",
     },
     { role: "user", content: `原始输出：\n${raw.slice(0, maxHtmlLength)}\n问题：${reason}` },
-  ], deadline)) as { html?: unknown; summary?: unknown };
+  ], deadline, reserve(12_000))) as { html?: unknown; summary?: unknown };
   const html = validateHtml(result.html);
   check(html);
   return { html, summary: typeof result.summary === "string" && result.summary.trim() ? result.summary.slice(0, 2_000) : "已修复生成结果" };
@@ -168,6 +190,12 @@ export async function generateApplication(
   check: (html: string) => void,
 ): Promise<ModelResult> {
   if (prompt.length > maxPromptLength) throw new ModelError("需求文本过长", "MODEL_FORMAT");
+  let remaining = tokenBudget();
+  const reserve = (amount: number) => {
+    if (remaining < amount) throw new ModelError("模型任务预算不足", "MODEL_CONFIG");
+    remaining -= amount;
+    return amount;
+  };
   let repairs = 0;
   let planRaw = await callModel([
     {
@@ -175,7 +203,7 @@ export async function generateApplication(
       content: "你是规划器。只返回 JSON：{\"summary\":\"...\",\"requirements\":[\"...\"],\"interactions\":[\"...\"]}。不要 Markdown。",
     },
     { role: "user", content: `用户需求：${prompt}\n固定基线源码：${currentHtml ?? "无，首次生成"}\n请保留已有关键交互，除非用户明确要求移除。` },
-  ], deadline, 1_000);
+  ], deadline, reserve(1_000));
   let plan: GenerationPlan;
   try {
     plan = validatePlan(parseJson(planRaw));
@@ -185,7 +213,7 @@ export async function generateApplication(
     planRaw = await callModel([
       { role: "system", content: "修复格式。只返回 JSON：{\"summary\":\"...\",\"requirements\":[\"...\"],\"interactions\":[\"...\"]}。" },
       { role: "user", content: planRaw },
-    ], deadline, 1_000);
+    ], deadline, reserve(1_000));
     plan = validatePlan(parseJson(planRaw));
   }
   await onGenerating(plan);
@@ -198,7 +226,7 @@ export async function generateApplication(
       role: "user",
       content: `需求：${prompt}\n规划：${JSON.stringify(plan)}\n当前源码：${currentHtml?.slice(0, maxHtmlLength) ?? "无"}\n请输出完整 HTML。`,
     },
-  ], deadline);
+  ], deadline, reserve(12_000));
   await onChecking();
   let output: { html?: unknown; summary?: unknown };
   try {
@@ -207,7 +235,7 @@ export async function generateApplication(
   } catch (error) {
     if (!(error instanceof ModelError) || error.code !== "MODEL_FORMAT" || repairs >= 1) throw error;
     repairs++;
-    output = await repair(raw, error.message, deadline, check);
+    output = await repair(raw, error.message, deadline, check, reserve);
   }
   return {
     plan,

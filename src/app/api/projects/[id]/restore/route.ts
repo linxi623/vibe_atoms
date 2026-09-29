@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { uuid } from "@/lib/api";
-import { errorResponse, json, sameOrigin } from "@/lib/http";
+import { errorResponse, json, limitResponse, readJson, sameOrigin } from "@/lib/http";
+import { clientIpKey, reserveWrite } from "@/lib/limits";
 import { restoreVersion } from "@/lib/restore";
 import { visitorId } from "@/lib/session";
 
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest, context: Context) {
     if (!owner) return errorResponse("Session required", 401);
     const { id } = await context.params;
     if (!uuid.test(id)) return errorResponse("Project not found", 404);
-    const body = await request.json();
+    const body = await readJson(request) as { versionId?: unknown } | null;
     if (typeof body?.versionId !== "string" || !uuid.test(body.versionId)) {
       return errorResponse("Valid versionId required", 400);
     }
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest, context: Context) {
     if (!key || key.length > 128 || !/^[A-Za-z0-9_-]+$/.test(key)) {
       return errorResponse("Valid Idempotency-Key required", 400);
     }
+    await reserveWrite(owner, clientIpKey(request));
     const result = await restoreVersion(owner, id, body.versionId, key);
     if (result.kind === "not_found") return errorResponse("Project not found", 404);
     if (result.kind === "version_not_found") return errorResponse("Version not found", 404);
@@ -30,6 +32,8 @@ export async function POST(request: NextRequest, context: Context) {
       result.kind === "created" ? 201 : 200);
   } catch (error) {
     if (error instanceof SyntaxError) return errorResponse("Invalid JSON", 400);
+    const limited = limitResponse(error);
+    if (limited) return limited;
     return errorResponse("Database unavailable", 503);
   }
 }

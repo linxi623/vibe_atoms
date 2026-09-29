@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set persistent PostgreSQL DATABASE_URL}
+      APP_ORIGIN: ${APP_ORIGIN:?Set the public HTTPS origin}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:?Set the server-side model endpoint}
+      MODEL_NAME: ${MODEL_NAME:?Set the server-side model name}
+      MODEL_API_KEY: ${MODEL_API_KEY:?Set the server-side model key}
+      IP_HASH_SECRET: ${IP_HASH_SECRET:?Set a stable random IP hash secret}
+      TRUST_PROXY_IP: "true"
+      MODEL_TASK_TOKEN_BUDGET: ${MODEL_TASK_TOKEN_BUDGET:-25000}
+      LIMIT_TOTAL_TASKS: ${LIMIT_TOTAL_TASKS:-200}
+      LIMIT_GLOBAL_CONCURRENCY: ${LIMIT_GLOBAL_CONCURRENCY:-2}
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { errorResponse, json, sameOrigin } from "@/lib/http";
+import { errorResponse, json, limitResponse, readJson, sameOrigin } from "@/lib/http";
+import { clientIpKey, reserveWrite } from "@/lib/limits";
 import { visitorId } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest, context: Context) {
     if (!owner) return errorResponse("Session required", 401);
     const { id } = await context.params;
     if (!uuid.test(id)) return errorResponse("Project not found", 404);
+    await reserveWrite(owner, clientIpKey(request));
     const result = await db().query(
       `SELECT id, name, current_version_id AS "currentVersionId",
               created_at AS "createdAt", updated_at AS "updatedAt"
@@ -31,7 +33,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const owner = await visitorId(request);
     if (!owner) return errorResponse("Session required", 401);
-    const body = await request.json();
+    const body = await readJson(request) as { name?: unknown } | null;
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     if (!name || name.length > 80) return errorResponse("Name must be 1-80 characters", 400);
     const { id } = await context.params;
@@ -47,6 +49,8 @@ export async function PATCH(request: NextRequest, context: Context) {
     return json({ project: result.rows[0] });
   } catch (error) {
     if (error instanceof SyntaxError) return errorResponse("Invalid JSON", 400);
+    const limited = limitResponse(error);
+    if (limited) return limited;
     return errorResponse("Database unavailable", 503);
   }
 }

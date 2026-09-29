@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { errorResponse, json, sameOrigin } from "@/lib/http";
+import { errorResponse, json, limitResponse, readJson, sameOrigin } from "@/lib/http";
+import { clientIpKey, reserveWrite } from "@/lib/limits";
 import { visitorId } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -27,9 +28,10 @@ export async function POST(request: NextRequest) {
   try {
     const owner = await visitorId(request);
     if (!owner) return errorResponse("Session required", 401);
-    const body = await request.json();
+    const body = await readJson(request) as { name?: unknown } | null;
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     if (!name || name.length > 80) return errorResponse("Name must be 1-80 characters", 400);
+    await reserveWrite(owner, clientIpKey(request));
     const result = await db().query(
       `INSERT INTO projects(id, visitor_id, name) VALUES ($1, $2, $3)
        RETURNING id, name, current_version_id AS "currentVersionId",
@@ -39,6 +41,8 @@ export async function POST(request: NextRequest) {
     return json({ project: result.rows[0] }, 201);
   } catch (error) {
     if (error instanceof SyntaxError) return errorResponse("Invalid JSON", 400);
+    const limited = limitResponse(error);
+    if (limited) return limited;
     return errorResponse("Database unavailable", 503);
   }
 }
