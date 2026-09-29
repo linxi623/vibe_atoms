@@ -39,13 +39,33 @@ node --test --test-concurrency=1 tests/f1.test.mjs tests/generation.test.mjs tes
 
 生产模型服务必须使用 HTTPS；仅本地回环地址允许 HTTP 测试。COS/OSS 对象存储不是本 Demo 的依赖，不能代替 PostgreSQL；Cloudflare 可作为域名 DNS/代理入口，但不能代替应用主机或数据库。
 
-`Dockerfile` 与 `compose.deploy.yml` 提供单实例 Node.js 运行方式；它们**不创建生产数据库或 HTTPS 代理**。先准备持久的托管 PostgreSQL（连接要求 TLS 时在 `DATABASE_URL` 指定供应商要求的 SSL 参数）、能容纳最长 3 分钟同步请求的宿主、HTTPS 反向代理和可支付的模型额度。设好 `DATABASE_URL`、`APP_ORIGIN`、`MODEL_API_KEY`、`MODEL_BASE_URL`、`MODEL_NAME`、稳定随机的 `IP_HASH_SECRET` 等服务端变量，再在受信任的部署环境执行：
+`Dockerfile` 与 `compose.deploy.yml` 提供单实例 Node.js + PostgreSQL 运行方式。数据库使用服务器本地 Docker 持久卷，不开放公网 5432；应用通过内部地址 `db:5432` 连接。先准备能容纳最长 3 分钟同步请求的宿主、HTTPS 反向代理和可支付的模型额度。复制 `.env.production.example` 为服务器上的 `.env`，填写 `POSTGRES_PASSWORD`、`APP_ORIGIN`、`MODEL_API_KEY`、`MODEL_BASE_URL`、`MODEL_NAME`、稳定随机的 `IP_HASH_SECRET` 等变量，再执行：
 
 ```powershell
 docker compose -f compose.deploy.yml up -d --build
 ```
 
-容器启动前运行 SQL 迁移；健康检查 `GET /api/health` 检查数据库连接及模型配置是否存在，不消费模型额度，**不证明模型账户可用**。容器只绑定宿主 `127.0.0.1:3000`；HTTPS 代理应连接此端口，覆盖而不是透传客户端自带的 `X-Forwarded-For`，并确保只有代理可访问应用。`TRUST_PROXY_IP=true` 时应用只读取转发头首个有效 IP，并以 `IP_HASH_SECRET` HMAC 摘要入库；若无法保证受信任代理，请设 `TRUST_PROXY_IP=false`，所有未知客户端共用一个 IP 配额。`APP_ORIGIN` 必须是实际公开 HTTPS 源，写请求依赖精确 `Origin` 检查。请在反向代理与宿主分别验证请求时限，并在上线前实测首次生成、迭代、重启和重新部署后的持久化。
+同机部署的最短步骤如下。假设域名已经把 `demo` A 记录指向服务器公网 IP：
+
+```bash
+cd /opt/vibe-atoms
+cp .env.production.example .env
+nano .env
+chmod 600 .env
+docker compose -f compose.deploy.yml config --quiet
+docker compose -f compose.deploy.yml up -d --build
+docker compose -f compose.deploy.yml ps
+curl http://127.0.0.1:3000/api/health
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+先启动应用再重载 Caddy 也可以；Caddy 配置中的 `demo.linxi123.top` 必须和 `APP_ORIGIN=https://demo.linxi123.top` 完全对应。第一次启动会下载基础镜像、构建应用并自动运行数据库迁移，可能需要几分钟。看到 `curl` 返回 JSON 且域名可以打开后，再从外部浏览器验证生成流程。
+
+容器启动前运行 SQL 迁移；健康检查 `GET /api/health` 检查最新迁移、数据库连接及模型配置是否存在，不消费模型额度，**不证明模型账户可用**。容器只绑定宿主 `127.0.0.1:3000`，数据库不绑定宿主端口；Caddy 配置示例在 `deploy/Caddyfile`。HTTPS 代理应连接应用端口并覆盖而不是透传客户端自带的 `X-Forwarded-For`，确保只有代理可访问应用。`APP_ORIGIN` 必须是实际公开 HTTPS 源，写请求依赖精确 `Origin` 检查。请在反向代理与宿主分别验证请求时限，并在上线前实测首次生成、迭代、重启和重新部署后的持久化。
+
+数据库数据保存在 Docker volume `vibe_atoms_postgres_data`。普通 `docker compose restart` 或重新构建应用不会清空数据；不要执行 `docker compose down -v`，除非你已经有备份。服务器磁盘损坏会同时影响应用和数据库，必须定期把 PostgreSQL 备份复制到服务器以外的位置。
 
 ## 配额与安全
 
