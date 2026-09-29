@@ -13,8 +13,9 @@ export async function GET(request: NextRequest, context: Context) {
     if (!owner) return errorResponse("Session required", 401);
     if (!found) return errorResponse("Project not found", 404);
     const result = await db().query(
-      `SELECT id, sequence, summary, task_id AS "taskId", created_at AS "createdAt"
-       FROM versions WHERE project_id = $1 ORDER BY sequence DESC LIMIT 100`,
+      `SELECT id, sequence, summary, task_id AS "taskId",
+              restored_from_id AS "restoredFromId", created_at AS "createdAt"
+       FROM versions WHERE project_id = $1 ORDER BY sequence DESC`,
       [id],
     );
     return json({ versions: result.rows });

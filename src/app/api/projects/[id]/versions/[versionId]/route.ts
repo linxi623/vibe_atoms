@@ -13,7 +13,8 @@ export async function GET(request: NextRequest, context: Context) {
     if (!owner) return errorResponse("Session required", 401);
     if (!found || !uuid.test(versionId)) return errorResponse("Version not found", 404);
     const result = await db().query(
-      `SELECT id, sequence, html, summary, task_id AS "taskId", created_at AS "createdAt"
+      `SELECT id, sequence, html, summary, task_id AS "taskId",
+              restored_from_id AS "restoredFromId", created_at AS "createdAt"
        FROM versions WHERE id = $1 AND project_id = $2`,
       [versionId, id],
     );

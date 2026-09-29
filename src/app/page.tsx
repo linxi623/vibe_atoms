@@ -12,7 +12,7 @@ type Task = {
   errorCode: string | null; errorDetail: string | null; retryOfId: string | null;
   createdAt: string; updatedAt: string;
 };
-type Version = { id: string; sequence: number; summary: string };
+type Version = { id: string; sequence: number; summary: string; restoredFromId: string | null };
 type Snapshot = { messages: Message[]; tasks: Task[]; versions: Version[]; project: Project };
 
 class ApiError extends Error {
@@ -332,7 +332,12 @@ export default function Home() {
           <div className={`result-pane ${view === "chat" ? "mobile-hidden" : ""}`}>
             <PreviewPanel key={selected ?? "new"} projectId={selected}
               currentVersionId={current?.project.currentVersionId ?? null}
-              versions={current?.versions ?? []} running={running} />
+              versions={current?.versions ?? []} running={running}
+              onRestored={async (id) => {
+                const data = await loadProject(id);
+                setSnapshot((previous) => previous?.project.id === id ? data : previous);
+                setProjects((items) => items.map((item) => item.id === id ? data.project : item));
+              }} />
           </div>
         </div>
       </section>

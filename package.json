@@ -11,9 +11,11 @@
     "test:f1": "node --test tests/f1.test.mjs",
     "test:b": "node --test tests/generation.test.mjs",
     "test:c": "node --test tests/workbench.test.mjs",
-    "test:d": "node --test tests/frame-policy.test.mjs tests/preview.test.mjs"
+    "test:d": "node --test tests/frame-policy.test.mjs tests/preview.test.mjs",
+    "test:e": "node --test tests/versions.test.mjs"
   },
   "dependencies": {
+    "diff": "^8.0.2",
     "next": "^16.3.6",
     "pg": "^8.16.3",
     "react": "^19.2.0",
