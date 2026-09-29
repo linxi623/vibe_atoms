@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: vibe
+      POSTGRES_PASSWORD: vibe
+      POSTGRES_DB: vibe_atoms
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
