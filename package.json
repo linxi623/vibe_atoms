@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "node scripts/migrate.mjs",
     "test:f1": "node --test tests/f1.test.mjs",
-    "test:b": "node --test tests/generation.test.mjs"
+    "test:b": "node --test tests/generation.test.mjs",
+    "test:c": "node --test tests/workbench.test.mjs"
   },
   "dependencies": {
     "next": "^16.3.6",
@@ -22,6 +23,7 @@
     "@types/pg": "^8.15.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "playwright-core": "^1.63.0",
     "typescript": "^5.9.0"
   }
 }
