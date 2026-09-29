@@ -53,3 +53,21 @@
 .diff-stage pre{margin:0;padding:18px 20px;font:12px/1.6 Consolas,monospace;tab-size:2;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;flex:1}
 .diff-added{background:#20543b;color:#baf6cb}.diff-removed{background:#60362e;color:#ffd0c5;text-decoration:line-through}
 .diff-stage p{padding:0 18px;font-size:12px}
+.sidebar-bottom{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0}
+.account-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-bottom button{border:1px solid #c8d9ce;background:white;border-radius:4px;color:#246950;padding:5px 7px;font-size:11px;white-space:nowrap}
+.auth-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:rgba(21,38,32,.45);padding:16px}
+.auth-dialog{width:min(100%,390px);background:#fff;border:1px solid #d9e5dd;border-radius:8px;padding:23px;box-shadow:0 16px 48px rgba(23,48,36,.17);color:#24392e}
+.auth-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.auth-heading h2{font-size:19px;margin:0}
+.auth-heading button{border:0;background:none;font-size:24px;color:#687a70;line-height:1}
+.auth-dialog p{font-size:12px;line-height:1.6;color:#708077;margin:12px 0 20px}
+.auth-dialog form{display:flex;flex-direction:column;gap:8px}
+.auth-dialog label{font-size:12px;font-weight:600;margin-top:5px}
+.auth-dialog input{width:100%;height:38px;border:1px solid #cddbd1;border-radius:5px;padding:0 10px;font:inherit;font-size:13px;color:#1e352a}
+.auth-dialog input:focus{outline:2px solid #65a68e;outline-offset:1px}
+.auth-hint{font-size:11px;color:#728076}
+.auth-dialog .auth-error{margin:2px 0;color:#a2392d}
+.auth-submit{margin-top:12px;border:0;border-radius:5px;background:#168769;color:white;min-height:38px;font-size:13px;font-weight:600}
+.auth-switch{display:block;margin:15px auto 0;border:0;background:none;color:#176b55;font-size:12px}
+@media(max-width:800px){.sidebar-bottom{display:flex;padding:10px 0 0;justify-content:center}.sidebar-bottom .account-name{display:none}.sidebar-bottom button{white-space:normal;overflow-wrap:anywhere;text-align:center;padding:5px 2px;width:100%;font-size:10px}.result-pane.mobile-hidden{display:none}}

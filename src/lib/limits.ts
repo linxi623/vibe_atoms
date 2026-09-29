@@ -74,6 +74,23 @@ export async function reserveSession(client: pg.PoolClient, ip: string): Promise
   await reserve(client, "session", [["ip", ip, "hour", limits().sessionPerHour]]);
 }
 
+export async function reserveAuth(ip: string, emailKey: string): Promise<void> {
+  const client = await db().connect();
+  try {
+    await client.query("BEGIN");
+    await reserve(client, "auth", [
+      ["ip", ip, "hour", 100],
+      ["session", emailKey, "hour", 10],
+    ]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function reserveGeneration(client: pg.PoolClient, owner: string, ip: string, project: string): Promise<void> {
   const setting = limits();
   await reserve(client, "generation", [

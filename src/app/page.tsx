@@ -58,6 +58,12 @@ export default function Home() {
   const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [view, setView] = useState<"chat" | "preview">("chat");
+  const [account, setAccount] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -66,7 +72,11 @@ export default function Home() {
     setError("");
     try {
       await api("/api/session", { method: "POST" });
-      const { projects: items } = await api<{ projects: Project[] }>("/api/projects");
+      const [{ projects: items }, identity] = await Promise.all([
+        api<{ projects: Project[] }>("/api/projects"),
+        api<{ email: string | null }>("/api/auth"),
+      ]);
+      setAccount(identity.email);
       setProjects(items);
       setSelected((current) => {
         const requested = new URLSearchParams(window.location.search).get("project");
@@ -141,6 +151,46 @@ export default function Home() {
   const locked = !!(selected && (pending[selected] || running));
   const draft = drafts[selected ?? "new"] ?? "";
   const warning = error || submitErrors[selected ?? "new"];
+
+  async function submitAuth(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!authMode || authBusy) return;
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      await api(`/api/auth/${authMode}`, {
+        method: "POST", body: JSON.stringify({ email: authEmail, password: authPassword }),
+      });
+      setAuthMode(null);
+      setAuthPassword("");
+      setSelected(null);
+      setSnapshot(null);
+      setProjects([]);
+      await initialize();
+    } catch (cause) {
+      setAuthError(messageOf(cause));
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function logout() {
+    if (busy || authBusy) return;
+    setAuthBusy(true);
+    setError("");
+    try {
+      await api("/api/auth", { method: "DELETE" });
+      setAccount(null);
+      setSelected(null);
+      setSnapshot(null);
+      setProjects([]);
+      await initialize();
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   async function createProject() {
     const name = window.prompt("项目名称", "未命名项目")?.trim();
@@ -252,7 +302,11 @@ export default function Home() {
           ))}
           {!loading && projects.length === 0 && <p className="sidebar-empty">还没有项目</p>}
         </nav>
-        <div className="sidebar-bottom">访客工作空间</div>
+        <div className="sidebar-bottom">
+          <span className="account-name" title={account ?? "访客工作空间"}>{account ?? "访客工作空间"}</span>
+          {account ? <button onClick={() => void logout()} disabled={authBusy} aria-label="退出登录" title="退出登录">退出</button>
+            : <button onClick={() => { setAuthMode("login"); setAuthError(""); }} aria-label="登录或注册" title="登录或注册">登录 / 注册</button>}
+        </div>
       </aside>
 
       <section className="main-area">
@@ -341,6 +395,33 @@ export default function Home() {
           </div>
         </div>
       </section>
+      {authMode && <div className="auth-backdrop" onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !authBusy) setAuthMode(null);
+      }}>
+        <section className="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+          <div className="auth-heading">
+            <h2 id="auth-title">{authMode === "login" ? "登录账户" : "注册账户"}</h2>
+            <button type="button" aria-label="关闭" title="关闭" onClick={() => setAuthMode(null)} disabled={authBusy}>×</button>
+          </div>
+          <p>登录后可在其他设备继续访问项目。当前访客项目将保留在账户中。</p>
+          <form onSubmit={(event) => void submitAuth(event)}>
+            <label htmlFor="auth-email">邮箱</label>
+            <input id="auth-email" type="email" autoComplete="email" required maxLength={254}
+              value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} autoFocus />
+            <label htmlFor="auth-password">密码</label>
+            <input id="auth-password" type="password" minLength={12} maxLength={128} required
+              autoComplete={authMode === "login" ? "current-password" : "new-password"}
+              value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} />
+            {authMode === "register" && <span className="auth-hint">至少 12 位字符</span>}
+            {authError && <p className="auth-error" role="alert">{authError}</p>}
+            <button className="auth-submit" type="submit" disabled={authBusy}>{authBusy ? "处理中..." : authMode === "login" ? "登录" : "创建账户"}</button>
+          </form>
+          <button className="auth-switch" type="button" disabled={authBusy} onClick={() => {
+            setAuthMode(authMode === "login" ? "register" : "login");
+            setAuthError("");
+          }}>{authMode === "login" ? "没有账户？注册" : "已有账户？登录"}</button>
+        </section>
+      </div>}
     </main>
   );
 }

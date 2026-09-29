@@ -31,9 +31,10 @@ Next.js Node Route Handlers（单实例有界请求）
 
 ## 3. 数据模型及一致性
 
-`visitors(id, token_hash, created_at)`、`projects(id, visitor_id, name, current_version_id, timestamps)`、`messages(id, project_id, role, content, task_id, created_at)`、`tasks(id, project_id, base_version_id, status, stage, error_code, idempotency_key, retry_of_id, timestamps)`、`versions(id, project_id, sequence, html, summary, task_id, restored_from_id, created_at)`。具体约束在 `db/migrations/0001_initial.sql`。
+`visitors(id, token_hash, created_at)`、`users(id, email, password_hash, owner_visitor_id, created_at)`、`account_sessions(token_hash, user_id, expires_at, created_at)`、`projects(id, visitor_id, name, current_version_id, timestamps)`、`messages(id, project_id, role, content, task_id, created_at)`、`tasks(id, project_id, base_version_id, status, stage, error_code, idempotency_key, retry_of_id, timestamps)`、`versions(id, project_id, sequence, html, summary, task_id, restored_from_id, created_at)`。具体约束在 `db/migrations/`。
 
 - Cookie 存 32 字节随机凭证（HttpOnly、SameSite=Lax；HTTPS 下 Secure）；数据库仅存 SHA-256 摘要。所有查询从服务端会话联接所有权，不接受客户端传 visitorId。
+- 邮箱密码注册将访客归属绑定到账户；登录时当前访客项目并入账户。密码以随机盐 scrypt 派生存储，账户会话 30 天到期，退出时撤销当前令牌。按 IP 和邮箱摘要限制认证尝试；未注册访客丢失 Cookie 后仍不可恢复项目。
 - 创建任务时锁定项目行，记录当前基线和幂等键；同项目只允许一个运行任务。并发重复请求由 `(project_id, idempotency_key)` 唯一约束返回同一任务。恢复也应在相同项目锁下进行。
 - 生成成功在一笔事务中插入不可变版本、更新 `current_version_id`、标记任务成功。失败保留旧版本。恢复复制目标 HTML 成新版本，设置 `restored_from_id`，不调用模型或删除历史。
 - 任务按服务端阶段及规划记录。首版采用有界同步请求加 `GET /api/tasks/:id` 轮询，避免“断网仍后台运行”的假承诺。单次模型调用最长 90 秒、任务最长 3 分钟；运行超时（含进程中断后的陈旧任务）由下次读取/任务启动时回收为 failed。部署宿主请求上限必须先验证。
@@ -43,6 +44,8 @@ Next.js Node Route Handlers（单实例有界请求）
 | 接口 | 方法与行为 |
 | --- | --- |
 | `/api/session` | POST 创建/续用访客 Cookie |
+| `/api/auth/register`、`/api/auth/login` | POST 注册或登录，迁移当前访客项目并签发账户 Cookie |
+| `/api/auth` | GET 当前账户，DELETE 退出当前设备 |
 | `/api/projects` | GET 当前访客列表，POST 创建 |
 | `/api/projects/:id` | GET 详情，PATCH 重命名 |
 | `/api/projects/:id/generate` | POST 提示词和幂等键，固定基线并执行任务 |
@@ -78,6 +81,6 @@ Next.js Node Route Handlers（单实例有界请求）
 
 - 同步生成受平台请求时限影响。部署前用真实任务验证；若超时不能满足，改为受控后台 worker + 租约，不能用前端长等待掩盖。
 - 单文件生成无法覆盖后端、任意依赖或真实支付。输出应明确说明模拟能力。
-- 访客 Cookie 丢失即无法找回项目；跨设备登录不在范围。
+- 未注册访客 Cookie 丢失即无法找回项目；注册账户支持跨设备登录，但暂不提供密码重置。
 - 公开 Demo 要有 IP/会话配额、全局并发与花费上限；限制不能仅在 UI 实现。
 - 代码检查只保障有限格式与策略，不证明生成应用符合所有需求；待办、记账、展示站需人工关键路径测试。

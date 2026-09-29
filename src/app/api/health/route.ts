@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const migrated = await db().query(
-      "SELECT 1 FROM schema_migrations WHERE name = '0004_public_limits.sql'",
+      "SELECT 1 FROM schema_migrations WHERE name = '0005_accounts.sql'",
     );
     if (!migrated.rowCount) return errorResponse("Service unavailable", 503);
     const model = modelConfigured();
