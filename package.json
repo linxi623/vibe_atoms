@@ -10,7 +10,8 @@
     "db:migrate": "node scripts/migrate.mjs",
     "test:f1": "node --test tests/f1.test.mjs",
     "test:b": "node --test tests/generation.test.mjs",
-    "test:c": "node --test tests/workbench.test.mjs"
+    "test:c": "node --test tests/workbench.test.mjs",
+    "test:d": "node --test tests/frame-policy.test.mjs tests/preview.test.mjs"
   },
   "dependencies": {
     "next": "^16.3.6",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import PreviewPanel from "./preview-panel";
 
 type Project = { id: string; name: string; currentVersionId: string | null; updatedAt: string };
 type Message = { id: string; role: "user" | "assistant"; content: string; taskId: string | null; createdAt: string };
@@ -139,7 +140,6 @@ export default function Home() {
   const running = current?.tasks.some((task) => task.status === "running") ?? false;
   const locked = !!(selected && (pending[selected] || running));
   const draft = drafts[selected ?? "new"] ?? "";
-  const currentVersion = current?.versions.find((version) => version.id === current.project.currentVersionId);
   const warning = error || submitErrors[selected ?? "new"];
 
   async function createProject() {
@@ -329,17 +329,11 @@ export default function Home() {
             </form>
           </section>
 
-          <section className={`preview ${view === "chat" ? "mobile-hidden" : ""}`} aria-label="结果">
-            <div className="preview-toolbar">
-              <strong>生成结果</strong>
-              <span className="version-label">{currentVersion ? `当前版本 v${currentVersion.sequence}` : "暂无版本"}</span>
-            </div>
-            <div className="preview-empty">
-              <div className="preview-empty-icon" aria-hidden="true">▧</div>
-              <strong>{currentVersion ? currentVersion.summary : "尚无生成结果"}</strong>
-              <p>{currentVersion ? "版本已保存，预览尚不可用。" : "提交需求后，生成状态会显示在对话中。"}</p>
-            </div>
-          </section>
+          <div className={`result-pane ${view === "chat" ? "mobile-hidden" : ""}`}>
+            <PreviewPanel key={selected ?? "new"} projectId={selected}
+              currentVersionId={current?.project.currentVersionId ?? null}
+              versions={current?.versions ?? []} running={running} />
+          </div>
         </div>
       </section>
     </main>

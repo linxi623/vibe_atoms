@@ -26,3 +26,23 @@
 .preview-empty{padding:20px;text-align:center}
 .preview-empty strong,.preview-empty p{max-width:480px;overflow-wrap:anywhere}
 @media(max-width:800px){.conversation-stream{padding:16px 12px;gap:16px}.topbar{gap:8px}.project-heading{flex:1}.status{flex:none}.composer{min-height:110px}.preview-empty{padding:16px}}
+.result-pane{min-width:0;flex:1;display:flex}
+.result-pane .preview{min-height:0}
+.preview-toolbar{height:auto;min-height:48px;flex:none;gap:12px;flex-wrap:wrap;padding:0 14px}
+.preview-tabs{height:48px;flex:none;gap:14px}
+.preview-tabs button{height:48px;border:0;border-bottom:2px solid transparent;background:none;color:#718078;font-size:12px;padding:0 3px}
+.preview-tabs button[aria-selected=true]{border-bottom-color:#209073;color:#176b55;font-weight:600}
+.preview-actions{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:5px 0}
+.preview-actions select{max-width:125px;border:1px solid #d9e3dd;border-radius:4px;background:white;color:#35483e;padding:6px;font-size:12px}
+.preview-actions button{border:1px solid transparent;border-radius:4px;background:transparent;color:#3d6654;width:29px;height:29px;font-size:19px;line-height:1}
+.preview-actions button:hover,.preview-actions button[aria-pressed=true]{background:#e5f1e9}
+.preview-actions button:focus-visible,.preview-tabs button:focus-visible{outline:2px solid #17866a}
+.preview-info{display:flex;flex:none;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;background:#f0f5f1;border-bottom:1px solid #dfe8e1;font-size:11px;color:#687b6e}
+.preview-info strong{color:#205d47;font-size:12px}
+.preview-info span[role=alert]{color:#9b392f}
+.preview-stage{min-height:0;flex:1;display:flex;justify-content:center;overflow:auto;padding:12px;background:#e9eeeb}
+.preview-stage iframe{display:block;flex:none;width:100%;height:100%;min-height:450px;border:1px solid #d5dfd8;background:white}
+.preview-stage.mobile iframe{width:min(390px,100%);height:100%}
+.source-stage{min-height:0;flex:1;overflow:auto;background:#192723;color:#d9e9df}
+.source-stage pre{margin:0;padding:18px 20px;font:12px/1.6 Consolas,monospace;tab-size:2;white-space:pre;min-width:max-content}
+@media(max-width:800px){.result-pane{width:100%}.preview-toolbar{gap:0}.preview-actions{margin-left:auto}.preview-actions select{max-width:85px}.preview-stage{padding:7px}.preview-stage iframe{min-height:0}}
